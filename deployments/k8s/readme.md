@@ -39,3 +39,5 @@ Ingress
 kubectl get ingressroute -n vani-ledger
 Logs
 kubectl logs -f deployment/ledger-service -n vani-ledger
+
+https://copilot.microsoft.com/shares/w57LdbvREtXuz6ENqunNt
