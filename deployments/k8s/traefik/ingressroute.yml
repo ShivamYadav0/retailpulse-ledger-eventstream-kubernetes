@@ -1,0 +1,22 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+
+metadata:
+  name: ledger-ingress
+  namespace: vani-ledger
+
+spec:
+  entryPoints:
+    - web
+
+  routes:
+    - match: PathPrefix(`/v1`)
+      kind: Rule
+
+      middlewares:
+        - name: rate-limit
+
+      services:
+        - name: ledger-service
+          port: 8080
+

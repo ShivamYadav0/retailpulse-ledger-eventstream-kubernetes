@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  namespace: vani-ledger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+    spec:
+      containers:
+        - name: pgbouncer
+          image: edoburu/pgbouncer:1.17.0
+          ports:
+            - containerPort: 6432
+          env:
+            - name: DB_HOST
+              value: postgres
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_DB
+            - name: POOL_MODE
+              value: transaction
+            - name: MAX_CLIENT_CONN
+              value: "1000"
+            - name: DEFAULT_POOL_SIZE
+              value: "50"
+            - name: LISTEN_ADDR
+              value: "0.0.0.0"
+            - name: LISTEN_PORT
+              value: "6432"         # Matches your Docker Compose environment variable
+            - name: AUTH_TYPE
+              value: "trust"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: vani-ledger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            - redis-server
+            - /usr/local/etc/redis/redis.conf
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: redis-config
+              mountPath: /usr/local/etc/redis
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 3
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-config

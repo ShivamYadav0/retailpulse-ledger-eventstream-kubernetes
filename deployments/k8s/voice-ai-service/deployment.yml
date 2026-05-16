@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: voice-ai-service
+  namespace: vani-ledger
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: voice-ai-service
+
+  template:
+    metadata:
+      labels:
+        app: voice-ai-service
+
+    spec:
+      containers:
+        - name: voice-ai-service
+          image: smart-retail-dep-microservices-voice-ai-service:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 8000
+
+          env:
+            - name: REDIS_HOST
+              value: redis
+
+            - name: REDIS_PORT
+              value: "6379"
+
+            - name: KAFKA_BROKERS
+              value: kafka.vani-ledger.svc.cluster.local:9092
+
+            - name: VOICE_REQUEST_TOPIC
+              value: voice-requests
+
+            - name: VOICE_RESPONSE_TOPIC
+              value: voice-results
+
+            - name: VOICE_CONSUMER_GROUP
+              value: voice-ai-service
+
+            - name: GEMINI_MODEL
+              value: gemini-2.5-flash
+              
+            - name: TRANSCRIPTION_MODEL
+              value: whisper-1
+
+            - name: VOICE_CIRCUIT_FAILURE_THRESHOLD
+              value: "5"
+
+            - name: VOICE_CIRCUIT_RESET_SECONDS
+              value: "15"
+
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: OPENAI_API_KEY
+
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: GOOGLE_API_KEY
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+
+            limits:
+              cpu: 2
+              memory: 2Gi
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true

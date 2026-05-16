@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: vani-ledger
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: notification-service
+
+  template:
+    metadata:
+      labels:
+        app: notification-service
+
+    spec:
+      containers:
+        - name: notification-service
+          image: smart-retail-dep-microservices-notification-service:latest
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: KAFKA_BROKERS
+              value: kafka.vani-ledger.svc.cluster.local:9092
+
+          ports:
+            - containerPort: 7000
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 7000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 7000
+            initialDelaySeconds: 5
+            periodSeconds: 3

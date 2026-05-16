@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: init-scripts
+  namespace: vani-ledger
+data:
+  01-schema.sql: |
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS transactions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id),
+      amount NUMERIC(18,4) NOT NULL,
+      description TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+
+  02-default-user.sql: |
+    INSERT INTO users (id, email)
+    VALUES ('00000000-0000-0000-0000-000000000001', 'default@ledger.local')
+    ON CONFLICT (id) DO NOTHING;

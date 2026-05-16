@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer
+  namespace: vani-ledger
+spec:
+  selector:
+    app: pgbouncer
+  ports:        
+    - protocol: TCP
+      port: 6432        # The port your batch-worker app talks to 
+      targetPort: 6432  # <-- Change this to 5432 so that pgbouncer forwards to the correct port on postgres

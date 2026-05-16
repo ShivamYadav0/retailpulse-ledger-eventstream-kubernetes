@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pg-hba-config
+  namespace: vani-ledger
+data:
+  pg_hba.conf: |
+    # Local connections (trust for dev)
+    local   all             all                                     trust
+    host    all             all             127.0.0.1/32            trust
+    host    all             all             ::1/128                 trust
+
+    # Ledger user inside Docker network (trust)
+    host    ledger          ledger          172.80.0.0/16           trust
+    host    ledger          ledger          ::/0                    trust
+
+    # Replication (trust for localhost)
+    local   replication     all                                     trust
+    host    replication     all             127.0.0.1/32            trust
+    host    replication     all             ::1/128                 trust
+
+    # Catch‑all for external connections (secure)
+    host    all             all             0.0.0.0/0               scram-sha-256
+    host    all             all             ::/0                    scram-sha-256
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: init-scripts
+  namespace: vani-ledger
+data:
+  01-schema.sql: |
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS transactions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id),
+      amount NUMERIC(18,4) NOT NULL,
+      description TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+
+  02-default-user.sql: |
+    INSERT INTO users (id, email)
+    VALUES ('00000000-0000-0000-0000-000000000001', 'default@ledger.local')
+    ON CONFLICT (id) DO NOTHING;
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: vani-ledger
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_DB
+          command: ["postgres"]
+          args: ["-c", "hba_file=/etc/postgresql/pg_hba.conf"]
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+            - name: pg-hba-config
+              mountPath: /etc/postgresql/pg_hba.conf
+              subPath: pg_hba.conf
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1
+              memory: 2Gi
+          livenessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: pg-hba-config
+          configMap:
+            name: pg-hba-config
+        - name: init-scripts
+          configMap:
+            name: init-scripts
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: vani-ledger
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  clusterIP: None
+  selector:
+    app: postgres

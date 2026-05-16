@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledger-service
+  namespace: vani-ledger
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ledger-service
+  template:
+    metadata:
+      labels:
+        app: ledger-service
+    spec:
+      containers:
+        - name: ledger-service
+          image: smart-retail-dep-microservices-ledger-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: REDIS_ADDR
+              value: redis:6379
+            - name: KAFKA_BROKERS
+              value: kafka.vani-ledger.svc.cluster.local:9092
+            - name: PG_CONN
+              value: postgresql://ledger:ledgerpass@pgbouncer:6432/ledger
+            - name: VOICE_REQUEST_TOPIC
+              value: voice-requests
+            - name: VOICE_RESPONSE_TOPIC
+              value: voice-results
+            - name: VOICE_POLL_INTERVAL_MS
+              value: "1000"
+            - name: VOICE_POLL_ATTEMPTS
+              value: "30"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+
+            initialDelaySeconds: 5
+            periodSeconds: 10

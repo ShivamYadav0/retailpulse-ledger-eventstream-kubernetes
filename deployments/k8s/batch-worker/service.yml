@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: batch-worker
+  namespace: vani-ledger
+
+spec:
+  selector:
+    app: batch-worker
+
+  ports:
+    - port: 9000
+      targetPort: 9000

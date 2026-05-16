@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledger-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ledger-service
+  template:
+    metadata:
+      labels:
+        app: ledger-service
+    spec:
+      containers:
+        - name: ledger-service
+          image: ledger-service:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: REDIS_ADDR
+              value: redis:6379
+            - name: KAFKA_BROKERS
+              value: kafka.vani-ledger.svc.cluster.local:9092
+            - name: PG_CONN
+              value: postgresql://ledger:ledgerpass@pgbouncer:6432/ledger
+            - name: VOICE_REQUEST_TOPIC
+              value: voice-requests
+            - name: VOICE_RESPONSE_TOPIC
+              value: voice-results
+            - name: VOICE_POLL_INTERVAL_MS
+              value: "1000"
+            - name: VOICE_POLL_ATTEMPTS
+              value: "30"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voice-ai-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: voice-ai-service
+  template:
+    metadata:
+      labels:
+        app: voice-ai-service
+    spec:
+      containers:
+        - name: voice-ai-service
+          image: voice-ai-service:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: KAFKA_BROKERS
+              value: kafka.vani-ledger.svc.cluster.local:9092
+            - name: VOICE_REQUEST_TOPIC
+              value: voice-requests
+            - name: VOICE_RESPONSE_TOPIC
+              value: voice-results
+            - name: OPENAI_API_KEY
+              value: REPLACE_ME
+            - name: GOOGLE_API_KEY
+              value: REPLACE_ME
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: batch-worker
+  template:
+    metadata:
+      labels:
+        app: batch-worker
+    spec:
+      containers:
+        - name: batch-worker
+          image: batch-worker:latest
+          env:
+            - name: KAFKA_BROKERS
+              value: kafka.vani-ledger.svc.cluster.local:9092
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: notification-service
+          image: notification-service:latest
+          env:
+            - name: KAFKA_BROKERS
+              value: kafka.vani-ledger.svc.cluster.local:9092

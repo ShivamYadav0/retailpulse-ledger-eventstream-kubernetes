@@ -1,0 +1,13 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: ledger-ingress
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: PathPrefix(`/v1`)
+      kind: Rule
+      services:
+        - name: ledger-service
+          port: 8080

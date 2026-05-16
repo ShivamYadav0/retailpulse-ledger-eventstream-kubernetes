@@ -1,0 +1,206 @@
+services:
+  traefik:
+    image: traefik:latest
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --api.dashboard=true
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - vani-ledger
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledgerpass
+      POSTGRES_DB: ledger
+    volumes:
+      # persistent data
+      - postgres-data:/var/lib/postgresql/data
+
+      # custom pg_hba
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf
+
+      # migrations/init scripts
+      - ./scripts/init:/docker-entrypoint-initdb.d
+
+    command: >
+      postgres
+      -c hba_file=/etc/postgresql/pg_hba.conf
+    networks:
+      - vani-ledger
+
+  pgbouncer:
+    image: edoburu/pgbouncer:1.17.0
+    depends_on:
+      - postgres
+    environment:
+      DB_HOST: postgres
+      DB_USER: ledger
+      DB_PASSWORD: ledgerpass
+      DB_NAME: ledger
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 50
+      LISTEN_ADDR: 0.0.0.0
+      LISTEN_PORT: 6432
+      AUTH_TYPE: trust
+    networks:
+      - vani-ledger
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger -d ledger"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    networks:
+      - vani-ledger
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  kafka:
+    image: apache/kafka:3.7.0
+    environment:
+
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"   # 👈 add this
+      KAFKA_NODE_ID: 1
+
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+
+    networks:
+      - vani-ledger
+
+  ledger-service:
+    build:
+      context: .
+      dockerfile: services/ledger-service/Dockerfile
+    environment:
+      - REDIS_ADDR=redis:6379
+      - KAFKA_BROKERS=kafka:9092
+      - PG_CONN=postgresql://ledger@pgbouncer:6432/ledger?sslmode=disable
+      - VOICE_REQUEST_TOPIC=voice-requests
+      - VOICE_RESPONSE_TOPIC=voice-results
+      - VOICE_POLL_INTERVAL_MS=1000
+      - VOICE_POLL_ATTEMPTS=30
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ledger-service.rule=PathPrefix(`/v1`)"
+      - "traefik.http.services.ledger-service.loadbalancer.server.port=8080"
+    networks:
+      - vani-ledger
+    depends_on:
+      redis:
+        condition: service_healthy
+        
+      pgbouncer:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+
+  voice-ai-service:
+    build:
+      context: .
+      dockerfile: services/voice-ai-service/Dockerfile
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDIS_HOST=redis
+      - GOOGLE_API_KEY=REPLACE_ME
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:9092
+      - VOICE_REQUEST_TOPIC=voice-requests
+      - VOICE_RESPONSE_TOPIC=voice-results
+      - VOICE_CONSUMER_GROUP=voice-ai-service
+      - VOICE_CIRCUIT_FAILURE_THRESHOLD=5
+      - VOICE_CIRCUIT_RESET_SECONDS=15
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.voice-ai.rule=PathPrefix(`/voice`)"
+      - "traefik.http.services.voice-ai.loadbalancer.server.port=8000"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    networks:
+      - vani-ledger
+
+  batch-worker:
+    build:
+      context: .
+      dockerfile: services/batch-worker/Dockerfile
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - PG_CONN=postgresql://ledger@pgbouncer:6432/ledger?sslmode=disable
+    depends_on:
+      - kafka
+      - pgbouncer
+    networks:
+      - vani-ledger
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      - kafka
+    networks:
+      - vani-ledger
+
+networks:
+  vani-ledger:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local

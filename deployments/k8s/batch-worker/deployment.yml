@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-worker
+  namespace: vani-ledger
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: batch-worker
+
+  template:
+    metadata:
+      labels:
+        app: batch-worker
+
+    spec:
+      containers:
+        - name: batch-worker
+          image: smart-retail-dep-microservices-batch-worker:latest
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: KAFKA_BROKERS
+              value: kafka.vani-ledger.svc.cluster.local:9092
+
+            - name: PG_CONN
+              value: postgresql://ledger:ledgerpass@pgbouncer:6432/ledger?sslmode=disable
+
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+
+            limits:
+              cpu: 1
+              memory: 1Gi

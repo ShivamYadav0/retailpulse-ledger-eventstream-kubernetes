@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: voice-ai-service
+  namespace: vani-ledger
+spec:
+  selector:
+    app: voice-ai-service
+  ports:
+    - port: 8000
+      targetPort: 8000
