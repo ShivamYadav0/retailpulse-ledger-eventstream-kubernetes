@@ -1,4 +1,4 @@
-# Smart Retail — High-level Overview
+# High-level Overview
 
 An enterprise-grade, event-driven retail microservices platform built around Kafka, resilient AI voice parsing, and a single transaction gateway.
 
