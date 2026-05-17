@@ -1,6 +1,3 @@
-Here’s a consolidated list of the **Kafka `docker exec` commands** we discussed, along with what each one does. This way you have a clear cheat‑sheet for working with your broker and topics:
-
----
 
 ### 🔎 Topic Management
 - **List all topics**
@@ -87,7 +84,3 @@ Here’s a consolidated list of the **Kafka `docker exec` commands** we discusse
   ➝ Displays Kafka broker logs for debugging startup, listener, or coordinator issues.
 
 ---
-
-This set of commands covers **topic creation/listing**, **producing/consuming messages**, and **consumer group management**.  
-
-Would you like me to also add a **ready‑to‑use JSON payload example** for `voice-requests` that you can paste directly into the producer console, so you can immediately test the full pipeline end‑to‑end?
